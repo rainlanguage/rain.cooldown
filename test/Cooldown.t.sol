@@ -47,7 +47,7 @@ contract CooldownTest is Test, Cooldown {
         cooldown_.initialize(0);
     }
 
-    function testZeroCooldown(uint32 a_, uint32 b_) public {
+    function testReinitializeCooldown(uint32 a_, uint32 b_) public {
         vm.assume(a_ > 0);
         vm.assume(b_ > 0);
 
@@ -69,9 +69,13 @@ contract CooldownTest is Test, Cooldown {
 
         vm.startPrank(alice_);
         ExternalCooldown cooldown_ = new ExternalCooldown();
+
+        assertEq(0, cooldown_.duration());
+
         vm.expectEmit(false, false, false, true);
         emit CooldownInitialize(alice_, uint256(cooldownDuration_));
         cooldown_.initialize(cooldownDuration_);
+
         assertEq(cooldownDuration_, cooldown_.duration());
     }
 
@@ -156,6 +160,42 @@ contract CooldownTest is Test, Cooldown {
             // Cooldowns expire.
             vm.warp(block.timestamp + cooldownDuration_);
         }
+    }
+
+    function testStaggeredCallers(uint32 cooldownDuration_, uint32 intermediateDuration_, address alice_, address bob_) public {
+        vm.assume(intermediateDuration_ > 0);
+        vm.assume(cooldownDuration_ > intermediateDuration_);
+        vm.assume(alice_ != bob_);
+
+        ExternalCooldown cooldown_ = new ExternalCooldown();
+        cooldown_.initialize(cooldownDuration_);
+
+        uint256 intermediateTimestamp_ = block.timestamp + intermediateDuration_;
+        uint256 aliceExpiry_ = block.timestamp + cooldownDuration_;
+        uint256 bobExpiry_ = intermediateTimestamp_ + cooldownDuration_;
+
+        vm.prank(alice_);
+        cooldown_.withCooldown();
+
+        vm.prank(alice_);
+        vm.warp(intermediateTimestamp_);
+        vm.expectRevert(abi.encodeWithSelector(ActiveCooldown.selector, alice_, alice_, aliceExpiry_));
+        cooldown_.withCooldown();
+
+        vm.prank(bob_);
+        cooldown_.withCooldown();
+
+        vm.warp(aliceExpiry_);
+        vm.prank(alice_);
+        cooldown_.withCooldown();
+
+        vm.prank(bob_);
+        vm.expectRevert(abi.encodeWithSelector(ActiveCooldown.selector, bob_, bob_, bobExpiry_));
+        cooldown_.withCooldown();
+
+        vm.warp(bobExpiry_);
+        vm.prank(bob_);
+        cooldown_.withCooldown();
     }
 
     function testGlobalCooldown(uint32 cooldownDuration_, address alice_) public {
