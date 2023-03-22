@@ -31,7 +31,7 @@ jobs:
         id: build
 
       - name: Run Forge tests
-        run: forge test -vvv
+        run: forge test -vvv --gas-report
         id: test
 
       - name: Check gas snapshots
