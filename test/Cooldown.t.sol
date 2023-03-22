@@ -162,7 +162,9 @@ contract CooldownTest is Test, Cooldown {
         }
     }
 
-    function testStaggeredCallers(uint32 cooldownDuration_, uint32 intermediateDuration_, address alice_, address bob_) public {
+    function testStaggeredCallers(uint32 cooldownDuration_, uint32 intermediateDuration_, address alice_, address bob_)
+        public
+    {
         vm.assume(intermediateDuration_ > 0);
         vm.assume(cooldownDuration_ > intermediateDuration_);
         vm.assume(alice_ != bob_);
