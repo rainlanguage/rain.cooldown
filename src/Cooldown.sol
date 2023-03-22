@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: CAL
 pragma solidity ^0.8.18;
 
+/// Thrown when Cooldown is initialized with a 0 cooldown.
+error ZeroInitCooldown();
+
 /// @title Cooldown
 /// @notice `Cooldown` is a base contract that rate limits functions on
 /// the implementing contract per `msg.sender`.
@@ -56,7 +59,9 @@ contract Cooldown {
     /// Cooldown duration can only be set once.
     /// @param cooldownDuration_ The global cooldown duration.
     function initializeCooldown(uint256 cooldownDuration_) internal {
-        require(cooldownDuration_ > 0, "COOLDOWN_0");
+        if (cooldownDuration_ < 1) {
+            revert ZeroInitCooldown();
+        }
         require(cooldownDuration_ <= type(uint32).max, "COOLDOWN_MAX");
         // Reinitialization is a bug.
         assert(cooldownDuration == 0);
