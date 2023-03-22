@@ -4,6 +4,12 @@ pragma solidity ^0.8.18;
 /// Thrown when Cooldown is initialized with a 0 cooldown.
 error ZeroInitCooldown();
 
+/// Thrown if the Cooldown is being reinitialized with a new cooldown duration.
+error Reinitialize();
+
+/// Thrown if the Cooldown is triggered.
+error ActiveCooldown(address sender, uint256 cooldownExpiresAt, uint256 currentTime);
+
 /// @title Cooldown
 /// @notice `Cooldown` is a base contract that rate limits functions on
 /// the implementing contract per `msg.sender`.
@@ -50,21 +56,21 @@ contract Cooldown {
 
     /// Every caller has its own cooldown, the minimum time that the caller
     /// call another function sharing the same cooldown state.
-    mapping(address => uint256) private cooldowns;
-    address private caller;
+    mapping(address => uint256) internal cooldownExpiries;
+    address internal cooldownCaller;
 
     /// Initialize the cooldown duration.
     /// The cooldown duration is global to the contract.
     /// Cooldown duration must be greater than 0.
     /// Cooldown duration can only be set once.
     /// @param cooldownDuration_ The global cooldown duration.
-    function initializeCooldown(uint256 cooldownDuration_) internal {
+    function initializeCooldown(uint32 cooldownDuration_) internal {
         if (cooldownDuration_ < 1) {
             revert ZeroInitCooldown();
         }
-        require(cooldownDuration_ <= type(uint32).max, "COOLDOWN_MAX");
-        // Reinitialization is a bug.
-        assert(cooldownDuration == 0);
+        if (cooldownDuration > 0) {
+            revert Reinitialize();
+        }
         cooldownDuration = cooldownDuration_;
         emit CooldownInitialize(msg.sender, cooldownDuration_);
     }
@@ -73,14 +79,16 @@ contract Cooldown {
     /// Saves the original caller so that cooldowns are enforced across
     /// reentrant code.
     modifier onlyAfterCooldown() {
-        address caller_ = caller == address(0) ? caller = msg.sender : caller;
-        require(cooldowns[caller_] <= block.timestamp, "COOLDOWN");
+        address caller_ = cooldownCaller == address(0) ? cooldownCaller = msg.sender : cooldownCaller;
+        if (cooldownExpiries[caller_] > block.timestamp) {
+            revert ActiveCooldown(msg.sender, cooldownExpiries[caller_], block.timestamp);
+        }
         // Every action that requires a cooldown also triggers a cooldown.
         uint256 cooldown_ = block.timestamp + cooldownDuration;
-        cooldowns[caller_] = cooldown_;
+        cooldownExpiries[caller_] = cooldown_;
         emit CooldownTriggered(caller_, cooldown_);
         _;
         // Refund as much gas as we can.
-        delete caller;
+        delete cooldownCaller;
     }
 }
