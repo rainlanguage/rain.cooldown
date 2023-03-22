@@ -61,14 +61,35 @@ contract CooldownTest is Test, Cooldown {
         ExternalCooldown cooldown_ = new ExternalCooldown();
         cooldown_.initialize(cooldownDuration_);
 
-        vm.startPrank(alice_);
-        cooldown_.withCooldown();
+        for (uint256 i_ = 0; i_ < 5; i_++) {
+            // Alice triggers cooldown.
+            vm.startPrank(alice_);
+            cooldown_.withCooldown();
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ActiveCooldown.selector, alice_, block.timestamp + cooldownDuration_, block.timestamp
-            )
-        );
-        cooldown_.withCooldown();
+            // She can't call again.
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    ActiveCooldown.selector, alice_, block.timestamp + cooldownDuration_, block.timestamp
+                )
+            );
+            cooldown_.withCooldown();
+            vm.stopPrank();
+
+            // Bob can still call.
+            vm.startPrank(bob_);
+            cooldown_.withCooldown();
+
+            // Bob can't call now
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    ActiveCooldown.selector, bob_, block.timestamp + cooldownDuration_, block.timestamp
+                )
+            );
+            cooldown_.withCooldown();
+            vm.stopPrank();
+
+            // Cooldowns expire.
+            vm.warp(block.timestamp + cooldownDuration_);
+        }
     }
 }

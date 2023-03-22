@@ -1,0 +1,4 @@
+CooldownTest:testInitializeCooldown(uint32,address) (runs: 1024, μ: 283321, ~: 283321)
+CooldownTest:testOnlyAfterCooldown(uint32,address,address) (runs: 1024, μ: 626356, ~: 626587)
+CooldownTest:testZeroCooldown() (gas: 256909)
+CooldownTest:testZeroCooldown(uint32,uint32) (runs: 1024, μ: 282125, ~: 282125)
