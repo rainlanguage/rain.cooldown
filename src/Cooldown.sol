@@ -7,12 +7,19 @@ error ZeroInitCooldown();
 /// Thrown if the Cooldown is being reinitialized with a new cooldown duration.
 error Reinitialize();
 
+/// Thrown if the Cooldown is NOT initialized during an active cooldown check.
+error Uninitialized();
+
 /// Thrown if the Cooldown is triggered.
-error ActiveCooldown(address sender, uint256 cooldownExpiresAt, uint256 currentTime);
+/// @param caller The root caller that triggered the calldown.
+/// @param sender The `msg.sender` the cooldown is active for, MAY NOT be
+/// `caller` in the case of reentrancy.
+/// @param cooldownExpiresAt Timestamp the cooldown will expire at.
+error ActiveCooldown(address caller, address sender, uint256 cooldownExpiresAt);
 
 /// @title Cooldown
-/// @notice `Cooldown` is a base contract that rate limits functions on
-/// the implementing contract per `msg.sender`.
+/// @notice `Cooldown` is a base contract that rate limits functions on the
+/// implementing contract per `msg.sender`.
 ///
 /// Each time a function with the `onlyAfterCooldown` modifier is called the
 /// `msg.sender` must wait N seconds before calling any modified function.
@@ -34,29 +41,40 @@ error ActiveCooldown(address sender, uint256 cooldownExpiresAt, uint256 currentT
 /// `Cooldown` requires a minimum time in seconds to elapse between actions
 /// that cooldown. The modifier `onlyAfterCooldown` both enforces and triggers
 /// the cooldown. There is a single cooldown across all functions per-contract
-/// so any function call that requires a cooldown will also trigger it for
-/// all other functions.
+/// so any function call that requires a cooldown will also trigger it for all
+/// other functions.
 ///
 /// Cooldown is NOT an effective sybil resistance alone, as the cooldown is
-/// per-address only. It is always possible for many accounts to be created
-/// to spam a contract with dust in parallel.
-/// Cooldown is useful to stop a single account rapidly cycling contract
-/// state in a way that can be disruptive to peers. Cooldown works best when
-/// coupled with economic stake associated with each state change so that
-/// peers must lock capital during the cooldown. `Cooldown` tracks the first
-/// `msg.sender` it sees for a call stack so cooldowns are enforced across
-/// reentrant code. Any function that enforces a cooldown also has reentrancy
-/// protection.
+/// per-address only. It is always possible for many accounts to be created to
+/// spam a contract with dust in parallel.
+///
+/// Cooldown is useful to stop a single account rapidly cycling contract state in
+/// a way that can be disruptive to peers. Cooldown works best when coupled with
+/// economic stake associated with each state change so that peers must lock
+/// capital during the cooldown. `Cooldown` tracks the first `msg.sender` it sees
+/// for a call stack so cooldowns are enforced across reentrant code. Any
+/// function that enforces a cooldown also has reentrancy protection.
 contract Cooldown {
+    /// Cooldown contract has initialized.
+    /// @param sender `msg.sender` initializing the Cooldown contract.
+    /// @param cooldownDuration Duration in seconds between when a cooldown is
+    /// triggered by some caller and it being able to be called again.
     event CooldownInitialize(address sender, uint256 cooldownDuration);
-    event CooldownTriggered(address caller, uint256 cooldown);
+
+    /// Cooldown has been triggered.
+    /// @param sender `msg.sender` that triggered the cooldown.
+    /// @param cooldownExpiry Timestamp in seconds that the sender can call
+    /// functions on cooldown again.
+    event CooldownTriggered(address sender, uint256 cooldownExpiry);
 
     /// Time in seconds to restrict access to modified functions.
     uint32 internal cooldownDuration;
+
+    /// Active caller to Cooldown. Is zeroed out between calls to save gas.
     address internal cooldownCaller;
 
-    /// Every caller has its own cooldown, the minimum time that the caller
-    /// call another function sharing the same cooldown state.
+    /// Every caller has its own cooldown, the minimum time that the caller call
+    /// another function sharing the same cooldown state.
     mapping(address => uint256) internal cooldownExpiries;
 
     /// Initialize the cooldown duration.
@@ -79,15 +97,31 @@ contract Cooldown {
     /// Saves the original caller so that cooldowns are enforced across
     /// reentrant code.
     modifier onlyAfterCooldown() {
-        address caller_ = cooldownCaller == address(0) ? cooldownCaller = msg.sender : cooldownCaller;
-        if (cooldownExpiries[caller_] > block.timestamp) {
-            revert ActiveCooldown(msg.sender, cooldownExpiries[caller_], block.timestamp);
+        uint256 cooldownDuration_ = cooldownDuration;
+        if (cooldownDuration_ < 1) {
+            revert Uninitialized();
         }
+
+        // Guard against reentrancy being used to bypass cooldowns, without
+        // resorting to tx.origin.
+        address caller_ = cooldownCaller;
+        if (caller_ == address(0)) {
+            caller_ = msg.sender;
+            cooldownCaller = msg.sender;
+        }
+
+        if (cooldownExpiries[caller_] > block.timestamp) {
+            revert ActiveCooldown(caller_, msg.sender, cooldownExpiries[caller_]);
+        }
+
         // Every action that requires a cooldown also triggers a cooldown.
-        uint256 cooldown_ = block.timestamp + cooldownDuration;
-        cooldownExpiries[caller_] = cooldown_;
-        emit CooldownTriggered(caller_, cooldown_);
+        uint256 cooldownExpiry_ = block.timestamp + cooldownDuration_;
+        cooldownExpiries[caller_] = cooldownExpiry_;
+        emit CooldownTriggered(caller_, cooldownExpiry_);
+
+        // Do stuff.
         _;
+
         // Refund as much gas as we can.
         delete cooldownCaller;
     }
