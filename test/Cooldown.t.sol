@@ -65,7 +65,7 @@ contract CooldownTest is Test, Cooldown {
     }
 
     function testInitializeCooldown(uint32 cooldownDuration_, address alice_, address bob_) public {
-        vm.assume(cooldownDuration_ > 0); 
+        vm.assume(cooldownDuration_ > 0);
 
         vm.startPrank(alice_);
         ExternalCooldown cooldownAlice_ = new ExternalCooldown();
@@ -76,14 +76,14 @@ contract CooldownTest is Test, Cooldown {
         emit CooldownInitialize(alice_, uint256(cooldownDuration_));
         cooldownAlice_.initialize(cooldownDuration_);
 
-        assertEq(cooldownDuration_, cooldownAlice_.duration()); 
+        assertEq(cooldownDuration_, cooldownAlice_.duration());
 
-        vm.stopPrank(); 
+        vm.stopPrank();
 
-        // Should Initialize for uint32 max 
-        uint32 cooldownDurationBob = type(uint32).max ;
+        // Should Initialize for uint32 max
+        uint32 cooldownDurationBob = type(uint32).max;
         vm.startPrank(bob_);
-        ExternalCooldown cooldownBob_ = new ExternalCooldown(); 
+        ExternalCooldown cooldownBob_ = new ExternalCooldown();
 
         assertEq(0, cooldownBob_.duration());
 
@@ -91,21 +91,18 @@ contract CooldownTest is Test, Cooldown {
         emit CooldownInitialize(bob_, uint256(cooldownDurationBob));
         cooldownBob_.initialize(cooldownDurationBob);
 
-        assertEq(cooldownDurationBob, type(uint32).max); 
+        assertEq(cooldownDurationBob, type(uint32).max);
+    }
 
-    } 
-
-     function testInitializeMaxCooldown(address alice_) public {
-
+    function testInitializeMaxCooldown(address alice_) public {
         vm.startPrank(alice_);
         ExternalCooldown cooldown_ = new ExternalCooldown();
         assertEq(0, cooldown_.duration());
 
         //Expect Revert for more than max(uint32) duration
         vm.expectRevert();
-        cooldown_.initialize(type(uint32).max+1);
-        vm.stopPrank(); 
-
+        cooldown_.initialize(type(uint32).max + 1);
+        vm.stopPrank();
     }
 
     function testCallerClear(uint32 cooldownDuration_, address alice_) public {
