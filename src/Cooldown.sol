@@ -93,7 +93,7 @@ contract Cooldown {
         emit CooldownInitialize(msg.sender, cooldownDuration_);
     }
 
-    /// Modifies a function to enforce the cooldown for `msg.sender`.
+    /// Modifies a function to enforce the cooldown `for `msg.sender`.
     /// Saves the original caller so that cooldowns are enforced across
     /// reentrant code.
     modifier onlyAfterCooldown() {
